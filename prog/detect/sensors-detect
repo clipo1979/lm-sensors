@@ -38,7 +38,7 @@ foreach ('/usr/sbin', '/usr/local/sbin', '/sbin') {
 #########################
 
 use constant NO_CACHE => 1;
-use constant LM_VERSION => '3.6.0+git';
+use constant LM_VERSION => '3.6.2+git';
 use vars qw(@pci_adapters @chip_ids @ipmi_ifs @non_hwmon_chip_ids
 	    $i2c_addresses_to_scan @i2c_byte_cache %opt);
 
@@ -725,7 +725,7 @@ use vars qw(@i2c_adapter_names);
 		i2c_detect => sub { adt7467_detect(@_, 2); },
 	}, {
 		name => "Analog Devices ADT7466",
-		driver => "to-be-written",
+		driver => "lm85",
 		i2c_addrs => [0x4c],
 		i2c_detect => sub { adt7467_detect(@_, 3); },
 	}, {
@@ -2102,6 +2102,11 @@ use constant FEAT_SMBUS	=> (1 << 7);
 		driver => "not-a-sensor",
 		devid => 0x83,
 	}, {
+		name => "SMSC SCH5524-NS Super IO",
+		# No datasheet
+		driver => "not-a-sensor",
+		devid => 0x8d,
+	}, {
 		name => "SMSC SCH5627 Super IO",
 		driver => "sch5627",
 		devid => 0xc6,
@@ -2373,6 +2378,13 @@ use constant FEAT_SMBUS	=> (1 << 7);
 		logdev => 0x0b,
 		features => FEAT_IN | FEAT_FAN | FEAT_TEMP,
 	}, {
+		name => "Nuvoton NCT6799D Super IO Sensors",
+		driver => "nct6775",
+		devid => 0xD800,
+		devid_mask => 0xFFF8,
+		logdev => 0x0b,
+		features => FEAT_IN | FEAT_FAN | FEAT_TEMP,
+	}, {
 		name => "Fintek F71805F/FG Super IO Sensors",
 		driver => "f71805f",
 		devid => 0x0406,
@@ -2534,7 +2546,7 @@ use constant FEAT_SMBUS	=> (1 << 7);
 		features => FEAT_IN | FEAT_FAN | FEAT_TEMP,
 	}, {
 		name => "ITE IT8623E Super IO Sensors",
-		driver => "to-be-written",	# it87
+		driver => "it87",
 		devid => 0x8623,
 		logdev => 0x04,
 		features => FEAT_IN | FEAT_FAN | FEAT_TEMP,
@@ -2548,6 +2560,12 @@ use constant FEAT_SMBUS	=> (1 << 7);
 		name => "ITE IT8626E Super IO Sensors",
 		driver => "to-be-written",	# it87
 		devid => 0x8626,
+		logdev => 0x04,
+		features => FEAT_IN | FEAT_FAN | FEAT_TEMP,
+	}, {
+		name => "ITE IT8628E Super IO Sensors",
+		driver => "it87",
+		devid => 0x8628,
 		logdev => 0x04,
 		features => FEAT_IN | FEAT_FAN | FEAT_TEMP,
 	}, {
@@ -2630,7 +2648,7 @@ use constant FEAT_SMBUS	=> (1 << 7);
 		features => FEAT_IN | FEAT_FAN | FEAT_TEMP,
 	}, {
 		name => "ITE IT8732F Super IO Sensors",
-		driver => "to-be-written",	# it87
+		driver => "it87",
 		devid => 0x8732,
 		logdev => 0x04,
 		features => FEAT_IN | FEAT_FAN | FEAT_TEMP,
@@ -2700,7 +2718,13 @@ use constant FEAT_SMBUS	=> (1 << 7);
 		devid => 0x8987,
 		logdev => 0x04,
 		features => FEAT_IN | FEAT_FAN | FEAT_TEMP,
-	}
+	}, {
+		name => "ITE IT87952E Super IO Sensors",
+		driver => "it87",
+		devid => 0x8695,
+		logdev => 0x04,
+		features => FEAT_IN | FEAT_FAN | FEAT_TEMP,
+	},
 );
 
 # Entries are grouped by family. Each family entry has the following fields:
@@ -3095,8 +3119,8 @@ use vars qw($kernel_version @kernel_version $kernel_arch);
 sub initialize_kernel_version
 {
 	chomp($kernel_version = `uname -r`);
-	$kernel_version =~ /(\d+)\.(\d+)\.(\d+)(.*)/;
-	@kernel_version = ($1, $2, $3, $4);
+	$kernel_version =~ /(\d+)\.(\d+)(?:\.(\d+))?(.*)/;
+	@kernel_version = ($1, $2, $3 || 0, $4);
 	chomp($kernel_arch = `uname -m`);
 
 	# We only support kernels >= 2.6.5
@@ -3346,7 +3370,9 @@ sub load_module
 # udev may take some time to create device nodes when loading modules
 sub udev_settle
 {
-	if (!(-x "/sbin/udevadm" && system("/sbin/udevadm settle") == 0)
+	if (!(-x "/usr/bin/udevadm" && system("/usr/bin/udevadm settle") == 0)
+	 && !(-x "/bin/udevadm" && system("/bin/udevadm settle") == 0)
+	 && !(-x "/sbin/udevadm" && system("/sbin/udevadm settle") == 0)
 	 && !(-x "/sbin/udevsettle" && system("/sbin/udevsettle") == 0)) {
 		sleep(1);
 	}
